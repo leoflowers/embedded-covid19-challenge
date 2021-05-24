@@ -1,29 +1,72 @@
 #include <mbed.h>
-#include <math.h>
-#include <USBSerial.h>
-#include "LIS3DSH.h"
+#include <Workout.hpp>
 
-DigitalOut led(LED1);
-USBSerial serial;
 
+// necessary declarations
 LIS3DSH acc(PA_7, PA_6, PA_5, PE_3);
+InterruptIn button(PA_0, PullDown);
+Workout workout = Workout();
+
+
+// button interrupt action
+void toggle();
+
 
 int main() {
-  int16_t X, Y, Z;
-  float roll, pitch;
+  /* set up */
+  // attaches toggle interrupt handler to button
+  button.rise(&toggle);
 
   // checks accelerometer is working
   if(acc.Detect() != 1) {
-    serial.printf("LIS3DSH Acceleromoter not detected!\n");
-    while(1){ };
-  }
-  while(1) {
-    wait(0.5);  
-    static char counter=0;
-    acc.ReadData(&X, &Y, &Z);           //read X, Y, Z values
-    acc.ReadAngles(&roll, &pitch);      //read roll and pitch angles
-    serial.printf("%d,%d,%d\n", X, Y, Z);
-    //serial.printf("Roll: %f   Pitch: %f\n", roll, pitch);
+    while(1) {};
   }
 
+  // idle state until button is pressed
+  while(workout.get_current_state() == IDLE) {
+    idle();
+  }
+
+  /* working loop */
+  while(1) {
+    switch(workout.get_current_state()) {
+      case SITUP:
+        process_situp(&acc, &workout);
+        break;
+      case PUSHUP:
+        process_pushup(&acc, &workout);
+        break;
+      case JJ:
+        process_jj(&acc, &workout);
+        break;
+      case SQUAT:
+        process_squat(&acc, &workout);
+        workout.check_reps();
+        break;
+      default:
+        workout.set_state(SITUP);
+        break;
+    }
+  }
+}
+
+
+void toggle() {
+  switch(workout.get_current_state()){
+    case IDLE:
+      workout.set_state(SITUP);
+      break;
+    case SITUP:
+      workout.set_state(PUSHUP);
+      break;
+    case PUSHUP:
+      workout.set_state(JJ);
+      break;
+    case JJ:
+      workout.set_state(SQUAT);
+      break;
+    case SQUAT:
+      workout.set_state(SITUP);
+      break;
+  }
 }
